@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace GithubKookBot.Services;
 
@@ -238,23 +239,6 @@ public class KookService
 
     #region Release
 
-    public string BuildReleaseKMarkdown(SubscriptionConfig sub, GithubRelease release)
-    {
-        string displayName = string.IsNullOrEmpty(sub.DisplayName) ? sub.FullName : sub.DisplayName;
-        string version = string.IsNullOrEmpty(release.Name) ? release.TagName : release.Name;
-        string pre = release.Prerelease ? "**预发布** " : "";
-        string body = release.Body ?? "暂无更新说明";
-        if (body.Length > 500) body = body[..500] + "...";
-        StringBuilder sb = new();
-        sb.AppendLine($"**🚀 {displayName} 新版本发布**");
-        sb.AppendLine($"{pre}版本号：{version}");
-        sb.AppendLine($"发布时间：{release.PublishedAt:yyyy-MM-dd HH:mm}");
-        if (release.Author != null) sb.AppendLine($"发布者：{release.Author.Login}");
-        sb.AppendLine("\n更新说明：\n" + body);
-        sb.AppendLine($"\n[👉 查看详情]({release.HtmlUrl})");
-        return sb.ToString();
-    }
-
     public async Task<object> BuildReleaseCardObj(SubscriptionConfig sub, GithubRelease release)
     {
         string displayName = string.IsNullOrEmpty(sub.DisplayName) ? sub.FullName : sub.DisplayName;
@@ -290,19 +274,19 @@ public class KookService
         if (release.Author != null)
         {
             var ctx = new KookContextModule();
-            ctx.elements.Add(new KookPlainText { content = "发布者：" });
+            ctx.elements.Add(new KookMarkdownText { content = "发布者：" });
             ctx.elements.Add(new KookImage { src = release.Author.AvatarUrl, size = "sm" });
-            ctx.elements.Add(new KookPlainText { content = release.Author.Login });
+            ctx.elements.Add(new KookMarkdownText { content = $"(font){release.Author.Login}(font)[purple]" });
             card.modules.Add(ctx);
         }
 
         card.modules.Add(new KookSection
         {
-            text = new KookPlainText { content = $"版本：{preText}{version}" }
+            text = new KookMarkdownText { content = $"版本：**{preText}{version}**" }
         });
         card.modules.Add(new KookSection
         {
-            text = new KookPlainText { content = $"发布时间：{release.PublishedAt:yyyy-MM-dd HH:mm}" }
+            text = new KookMarkdownText { content = $"发布时间：**{release.PublishedAt:yyyy-MM-dd HH:mm}**" }
         });
         card.modules.Add(new KookDividerModule());
 
@@ -328,7 +312,7 @@ public class KookService
 
     #region Commit卡片
 
-    public async Task<object> BuildCommitCardObj(SubscriptionConfig sub, GithubCommitItem commit, GithubRepoInfo? repoInfo)
+    public async Task<object> BuildCommitCardObj(SubscriptionConfig sub, GithubCommitItem commit, GithubRepoInfo? repoInfo, string branchName)
     {
         string displayName = string.IsNullOrEmpty(sub.DisplayName) ? sub.FullName : sub.DisplayName;
         string fullMsg = commit.Commit.Message;
@@ -345,14 +329,13 @@ public class KookService
             dateOriginals.Add(m.Value);
             return $"《DATE_{dateOriginals.Count - 1}》";
         });
-
         string zhText = await TranslateEnToCn(tempShort);
         for (int i = 0; i < dateOriginals.Count; i++)
         {
             zhText = zhText.Replace($"《DATE_{i}》", dateOriginals[i]);
         }
         var coAuthors = ParseCoAuthors(fullMsg);
-        string branchName = repoInfo?.DefaultBranch ?? "未知分支";
+
         KookCard card = new();
         card.modules.Add(new KookHeaderModule
         {
@@ -360,19 +343,20 @@ public class KookService
         });
         card.modules.Add(new KookDividerModule());
         var contextModule = new KookContextModule();
-        contextModule.elements.Add(new KookPlainText { content = $"提交作者：" });
+        contextModule.elements.Add(new KookMarkdownText { content = $"提交作者：" });
         contextModule.elements.Add(new KookImage { src = authorAvatar, size = "sm" });
-        contextModule.elements.Add(new KookPlainText { content = $"{authorName}" });
+        contextModule.elements.Add(new KookMarkdownText { content = $"(font){sub.FullName}(font)[purple]" });
         card.modules.Add(contextModule);
-        card.modules.Add(new KookSection { text = new KookPlainText { content = $"仓库：{sub.FullName}" } });
-        card.modules.Add(new KookSection { text = new KookPlainText { content = $"仓库分支：{branchName}" } });
+
+        card.modules.Add(new KookSection { text = new KookMarkdownText { content = $"仓库：(font){sub.FullName}(font)[danger]" } });
+        card.modules.Add(new KookSection { text = new KookMarkdownText { content = $"仓库分支：(font){branchName}(font)[success]" } });
         card.modules.Add(new KookSection { text = new KookPlainText { content = $"更新信息：{zhText}" } });
         if (coAuthors.Any())
         {
             string coText = $"共同作者：{string.Join("、", coAuthors)}";
-            card.modules.Add(new KookSection { text = new KookPlainText { content = coText } });
+            card.modules.Add(new KookSection { text = new KookMarkdownText { content = coText } });
         }
-        card.modules.Add(new KookSection { text = new KookPlainText { content = $"提交时间：{commitTime}" } });
+        card.modules.Add(new KookSection { text = new KookMarkdownText { content = $"提交时间：**{commitTime}**" } });
         card.modules.Add(new KookDividerModule());
         KookActionGroup actionGroup = new();
         actionGroup.elements.Add(new KookButton
