@@ -68,6 +68,6 @@
 ### 应用界面展示
 ![9f1z083j](https://github.com/user-attachments/assets/7f001e12-925b-4939-bf79-dc7e32e2210f)
 ![9f1z083j](https://github.com/user-attachments/assets/c356e5b2-cd63-4545-8021-5d7e3dc4d5e6)
-![9f1z083j](https://github.com/user-attachments/assets/c356e5b2-cd63-4545-8021-5d7e3dc4d5e6)
+![9f1z083j](https://github.com/user-attachments/assets/98a756b8-87f6-492e-a06c-1fdfbcad437f)
 ### 贡献
 - 欢迎提交 issue 或 PR。请遵循标准的 GitHub 工作流：fork -> feature branch -> PR -> Code review。
