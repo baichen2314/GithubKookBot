@@ -63,9 +63,11 @@
   | `FetchCommitCount` | 每次检查时抓取的提交数量上限（用于在消息中显示最近若干条提交）。 |
   
 ### 构建与发布
-- 发布可执行文件：
+- 发布可执行文件：dotnet publish -c Release -o ./publish
 
-  dotnet publish -c Release -o ./publish
-
+### 应用界面展示
+![9f1z083j](https://github.com/user-attachments/assets/7f001e12-925b-4939-bf79-dc7e32e2210f)
+![9f1z083j](https://github.com/user-attachments/assets/c356e5b2-cd63-4545-8021-5d7e3dc4d5e6)
+![9f1z083j](https://github.com/user-attachments/assets/c356e5b2-cd63-4545-8021-5d7e3dc4d5e6)
 ### 贡献
 - 欢迎提交 issue 或 PR。请遵循标准的 GitHub 工作流：fork -> feature branch -> PR -> Code review。
