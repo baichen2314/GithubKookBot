@@ -345,7 +345,7 @@ public class KookService
         var contextModule = new KookContextModule();
         contextModule.elements.Add(new KookMarkdownText { content = $"提交作者：" });
         contextModule.elements.Add(new KookImage { src = authorAvatar, size = "sm" });
-        contextModule.elements.Add(new KookMarkdownText { content = $"(font){sub.FullName}(font)[purple]" });
+        contextModule.elements.Add(new KookMarkdownText { content = $"(font){authorName}(font)[purple]" });
         card.modules.Add(contextModule);
 
         card.modules.Add(new KookSection { text = new KookMarkdownText { content = $"仓库：(font){sub.FullName}(font)[danger]" } });
