@@ -1,12 +1,10 @@
 using GithubKookBot.Models;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace GithubKookBot.Services;
 
@@ -27,6 +25,20 @@ public class KookService
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bot", _settings.KookBotToken);
         _httpClient.DefaultRequestHeaders.Accept.Clear();
         _httpClient.DefaultRequestHeaders.Accept.Add(MediaTypeWithQualityHeaderValue.Parse("application/json"));
+    }
+
+    private DateTime UtcToBeijing(DateTime utcTime)
+    {
+        TimeZoneInfo tz;
+        try
+        {
+            tz = TimeZoneInfo.FindSystemTimeZoneById("China Standard Time");
+        }
+        catch
+        {
+            tz = TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
+        }
+        return TimeZoneInfo.ConvertTimeFromUtc(utcTime, tz);
     }
 
     #region 消息发送入口
@@ -279,14 +291,14 @@ public class KookService
             ctx.elements.Add(new KookMarkdownText { content = $"(font){release.Author.Login}(font)[purple]" });
             card.modules.Add(ctx);
         }
-
+        DateTime beijingPublish = UtcToBeijing(release.PublishedAt);
         card.modules.Add(new KookSection
         {
             text = new KookMarkdownText { content = $"版本：**{preText}{version}**" }
         });
         card.modules.Add(new KookSection
         {
-            text = new KookMarkdownText { content = $"发布时间：**{release.PublishedAt:yyyy-MM-dd HH:mm}**" }
+            text = new KookMarkdownText { content = $"发布时间：**{beijingPublish:yyyy-MM-dd HH:mm}**" }
         });
         card.modules.Add(new KookDividerModule());
 
@@ -315,11 +327,31 @@ public class KookService
     public async Task<object> BuildCommitCardObj(SubscriptionConfig sub, GithubCommitItem commit, GithubRepoInfo? repoInfo, string branchName)
     {
         string displayName = string.IsNullOrEmpty(sub.DisplayName) ? sub.FullName : sub.DisplayName;
-        string fullMsg = commit.Commit.Message;
-        string shortMsg = fullMsg.Split('\n')[0].Trim();
+        string fullRawMsg = commit.Commit.Message;
+        string[] msgLines = fullRawMsg.Split(["\r\n", "\n"], StringSplitOptions.None);
+        string shortMsg = msgLines.Length > 0 ? msgLines[0].Trim() : string.Empty;
+        string bodyText = string.Empty;
+        if (msgLines.Length >= 3)
+        {
+            bodyText = string.Join("\n", msgLines.Skip(2)).Trim();
+        }
+        else if (msgLines.Length >= 2 && !string.IsNullOrWhiteSpace(msgLines[1]))
+        {
+            bodyText = string.Join("\n", msgLines.Skip(1)).Trim();
+        }
         string authorName = commit.Author?.Login ?? commit.Commit.Author?.Name ?? "未知";
         string authorAvatar = commit.Author?.AvatarUrl ?? "";
-        string commitTime = commit.Commit.Author != null ? commit.Commit.Author.Date.ToString("yyyy/MM/dd HH:mm") : "未知时间";
+        string commitTime;
+        if (commit.Commit.Author != null)
+        {
+            DateTime utcDate = commit.Commit.Author.Date;
+            DateTime bjDate = UtcToBeijing(utcDate);
+            commitTime = bjDate.ToString("yyyy/MM/dd HH:mm");
+        }
+        else
+        {
+            commitTime = "未知时间";
+        }
         string repoUrl = $"https://github.com/{sub.FullName}";
         string commitUrl = commit.HtmlUrl;
         Regex dateRegexAll = new Regex(@"\d{2}/\d{2}(/\d{2})?");
@@ -329,13 +361,32 @@ public class KookService
             dateOriginals.Add(m.Value);
             return $"《DATE_{dateOriginals.Count - 1}》";
         });
-        string zhText = await TranslateEnToCn(tempShort);
+        string zhTitle = await TranslateEnToCn(tempShort);
         for (int i = 0; i < dateOriginals.Count; i++)
         {
-            zhText = zhText.Replace($"《DATE_{i}》", dateOriginals[i]);
+            zhTitle = zhTitle.Replace($"《DATE_{i}》", dateOriginals[i]);
         }
-        var coAuthors = ParseCoAuthors(fullMsg);
-
+        string zhBody = string.Empty;
+        if (!string.IsNullOrWhiteSpace(bodyText))
+        {
+            List<string> bodyDateMarkers = new List<string>();
+            string tempBody = dateRegexAll.Replace(bodyText, m =>
+            {
+                bodyDateMarkers.Add(m.Value);
+                return $"《BDATE_{bodyDateMarkers.Count - 1}》";
+            });
+            zhBody = await TranslateEnToCn(tempBody);
+            for (int i = 0; i < bodyDateMarkers.Count; i++)
+            {
+                zhBody = zhBody.Replace($"《BDATE_{i}》", bodyDateMarkers[i]);
+            }
+            const int MaxBodyLength = 1200;
+            if (zhBody.Length > MaxBodyLength)
+            {
+                zhBody = zhBody[..MaxBodyLength] + "\n……内容过长，点击查看完整提交";
+            }
+        }
+        var coAuthors = ParseCoAuthors(fullRawMsg);
         KookCard card = new();
         card.modules.Add(new KookHeaderModule
         {
@@ -347,10 +398,13 @@ public class KookService
         contextModule.elements.Add(new KookImage { src = authorAvatar, size = "sm" });
         contextModule.elements.Add(new KookMarkdownText { content = $"(font){authorName}(font)[purple]" });
         card.modules.Add(contextModule);
-
         card.modules.Add(new KookSection { text = new KookMarkdownText { content = $"仓库：(font){sub.FullName}(font)[danger]" } });
         card.modules.Add(new KookSection { text = new KookMarkdownText { content = $"仓库分支：(font){branchName}(font)[success]" } });
-        card.modules.Add(new KookSection { text = new KookPlainText { content = $"更新信息：{zhText}" } });
+        card.modules.Add(new KookSection { text = new KookMarkdownText { content = $"**更新内容：** {zhTitle}" } });
+        if (!string.IsNullOrWhiteSpace(zhBody))
+        {
+            card.modules.Add(new KookSection { text = new KookMarkdownText { content = $"\n{zhBody}" } });
+        }
         if (coAuthors.Any())
         {
             string coText = $"共同作者：{string.Join("、", coAuthors)}";

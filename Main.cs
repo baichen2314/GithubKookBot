@@ -6,12 +6,12 @@ namespace GithubKookBot;
 
 public partial class Main : Form
 {
-    private readonly IServiceProvider _serviceProvider;
+    private readonly IServiceProvider? _serviceProvider;
+    private readonly ConfigSettings? _appSettings;
     private UpdateChecker? _updateChecker;
     private GithubService? _githubService;
     private KookService? _kookService;
     private StateStore? _stateStore;
-    private readonly ConfigSettings _appSettings;
     private bool _isTimerRunning = false;
     private DateTime _nextCheckTime;
 
@@ -59,16 +59,16 @@ public partial class Main : Form
             _kookService = _serviceProvider!.GetRequiredService<KookService>();
             _stateStore = _serviceProvider!.GetRequiredService<StateStore>();
             LogInfo("程序启动成功！");
-            LogInfo($"当前订阅仓库数量: {_appSettings.Subscriptions.Count}");
+            LogInfo($"当前订阅仓库数量: {_appSettings!.Subscriptions.Count}");
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    if (!string.IsNullOrEmpty(_appSettings.KookBotToken) && !string.IsNullOrEmpty(_appSettings.KookChannelId) && _appSettings.Subscriptions.Any())
+                    if (!string.IsNullOrEmpty(_appSettings!.KookBotToken) && !string.IsNullOrEmpty(_appSettings!.KookChannelId) && _appSettings!.Subscriptions.Any())
                     {
-                        bool sendOk = await _kookService.SendKMarkdownMessageAsync("🤖 GitHub 同步机器人已启动");
+                        bool sendOk = await _kookService!.SendKMarkdownMessageAsync("🤖 GitHub 同步机器人已启动");
                         LogInfo($"启动欢迎消息推送：{(sendOk ? "成功" : "失败")}");
-                        await _updateChecker.CheckAllAsync(true, false, _appSettings.FetchCommitCount);
+                        await _updateChecker!.CheckAllAsync(true, false, _appSettings!.FetchCommitCount);
                         LogInfo("首次初始化仓库检测完成");
                     }
                     else
@@ -91,16 +91,16 @@ public partial class Main : Form
 
     private void btnOpenConfig_Click(object sender, EventArgs e)
     {
-        using var cfgWin = new ConfigWindow(_appSettings, _serviceProvider!);
+        using var cfgWin = new ConfigWindow(_appSettings!, _serviceProvider!);
         cfgWin.ShowDialog();
         LogInfo("设置窗口已关闭，配置已自动同步");
         if (_isTimerRunning)
         {
-            int intervalMs = _appSettings.CheckIntervalMinutes * 60 * 1000;
+            int intervalMs = _appSettings!.CheckIntervalMinutes * 60 * 1000;
             timerCheck.Interval = intervalMs;
-            _nextCheckTime = DateTime.Now.AddMinutes(_appSettings.CheckIntervalMinutes);
+            _nextCheckTime = DateTime.Now.AddMinutes(_appSettings!.CheckIntervalMinutes);
             UpdateTimerLabel();
-            LogInfo("已重载定时检查间隔：" + _appSettings.CheckIntervalMinutes + "分钟");
+            LogInfo("已重载定时检查间隔：" + _appSettings!.CheckIntervalMinutes + "分钟");
         }
     }
 
@@ -117,7 +117,7 @@ public partial class Main : Form
         LogInfo("手动触发全仓库历史推送检测");
         try
         {
-            await _updateChecker.CheckAllAsync(false, true, _appSettings.FetchCommitCount);
+            await _updateChecker.CheckAllAsync(false, true, _appSettings!.FetchCommitCount);
             lblStatus.Text = "测试推送完成";
             LogInfo("手动推送执行完成");
         }
@@ -141,25 +141,25 @@ public partial class Main : Form
 
     private void StartTimer()
     {
-        if (string.IsNullOrWhiteSpace(_appSettings.KookBotToken) || string.IsNullOrWhiteSpace(_appSettings.KookChannelId))
+        if (string.IsNullOrWhiteSpace(_appSettings!.KookBotToken)
+            || string.IsNullOrWhiteSpace(_appSettings!.KookChannelId))
         {
             MessageBox.Show("请先打开设置配置KOOK信息", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
-        if (!_appSettings.Subscriptions.Any())
+        if (!_appSettings!.Subscriptions.Any())
         {
             MessageBox.Show("请在设置中添加订阅仓库", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
         }
-        int intervalMs = _appSettings.CheckIntervalMinutes * 60 * 1000;
+        int intervalMs = _appSettings!.CheckIntervalMinutes * 60 * 1000;
         timerCheck.Interval = intervalMs;
         timerCheck.Start();
         _isTimerRunning = true;
-        _nextCheckTime = DateTime.Now.AddMinutes(_appSettings.CheckIntervalMinutes);
+        _nextCheckTime = DateTime.Now.AddMinutes(_appSettings!.CheckIntervalMinutes);
         btnToggleTimer.Text = "停止定时检查";
         lblStatus.Text = "定时运行中";
         UpdateTimerLabel();
-        LogInfo($"定时任务启动，轮间隔 {_appSettings.CheckIntervalMinutes} 分钟({intervalMs}ms)");
+        LogInfo($"定时任务启动，轮间隔 {_appSettings!.CheckIntervalMinutes} 分钟({intervalMs}ms)");
     }
 
     private void StopTimer()
@@ -179,7 +179,7 @@ public partial class Main : Form
         LogInfo("定时轮询开始执行");
         try
         {
-            await _updateChecker!.CheckAllAsync(false, false, _appSettings.FetchCommitCount);
+            await _updateChecker!.CheckAllAsync(false, false, _appSettings!.FetchCommitCount);
             LogInfo("定时轮询执行完毕");
         }
         catch (Exception ex)
@@ -190,10 +190,10 @@ public partial class Main : Form
         {
             if (_isTimerRunning)
             {
-                int intervalMs = _appSettings.CheckIntervalMinutes * 60 * 1000;
+                int intervalMs = _appSettings!.CheckIntervalMinutes * 60 * 1000;
                 timerCheck.Interval = intervalMs;
+                _nextCheckTime = DateTime.Now.AddMinutes(_appSettings!.CheckIntervalMinutes);
                 timerCheck.Start();
-                _nextCheckTime = DateTime.Now.AddMinutes(_appSettings.CheckIntervalMinutes);
             }
             UpdateTimerLabel();
         }
@@ -222,5 +222,10 @@ public partial class Main : Form
     {
         if (_isTimerRunning) StopTimer();
         uiRefreshTimer?.Dispose();
+        if (_stateStore != null)
+        {
+            _stateStore!.SaveState();
+            _stateStore!.Dispose();
+        }
     }
 }

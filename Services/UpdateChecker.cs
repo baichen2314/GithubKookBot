@@ -107,6 +107,7 @@ public class UpdateChecker
             await Task.Delay(500);
         }
 
+        await _stateStore.SaveStateAsync();
         string endLog = "==== 批量检测完成 ====";
         _logger.LogInformation(endLog);
         FileLogger.Info(endLog);
@@ -148,7 +149,7 @@ public class UpdateChecker
         if (mode == "release" || mode == "both")
             await CheckReleaseUpdateAsync(sub, state);
 
-        _stateStore.UpdateState(state);
+        _stateStore.UpdateStateMemoryOnly(state);
     }
 
     private async Task CheckReleaseUpdateAsync(SubscriptionConfig sub, SubscriptionState state)
